@@ -1,0 +1,59 @@
+name: Build and deploy Lambda container
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: descuento-volumen
+  LAMBDA_FUNCTION: descuento-docker
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and publish image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          IMAGE="$REGISTRY/$ECR_REPOSITORY:${GITHUB_SHA::7}"
+          docker buildx build --platform linux/amd64 --provenance=false \
+            --build-arg "APP_VERSION=${GITHUB_SHA::7}" --load \
+            -t "$IMAGE" descuento-volumen
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Update Lambda image
+        run: |
+          aws lambda update-function-code \
+            --function-name "$LAMBDA_FUNCTION" \
+            --image-uri "$IMAGE"
+          aws lambda wait function-updated --function-name "$LAMBDA_FUNCTION"
+
+      - name: Smoke test deployed function
+        run: |
+          aws lambda invoke \
+            --function-name "$LAMBDA_FUNCTION" \
+            --cli-binary-format raw-in-base64-out \
+            --payload '{"unidades":150,"precioCentavos":2500}' \
+            respuesta.json
+          cat respuesta.json
+          jq -e '.porcentaje == 10 and .version == "'"${GITHUB_SHA::7}"'"' respuesta.json
