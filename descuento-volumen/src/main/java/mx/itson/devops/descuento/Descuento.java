@@ -7,7 +7,8 @@ package mx.itson.devops.descuento;
  *   - menos de 100 unidades   -> 0 %
  *   - de 100 a 499 unidades   -> 10 %
  *   - de 500 a 999 unidades   -> 15 %
- *   - de 1000 a 4999 unidades -> 20 %
+ *   - de 1000 a 1999 unidades -> 20 %
+ *   - de 2000 a 4999 unidades -> 25 %
  *   - DESDE 5000 unidades     -> 30 %
  *   - unidades negativas      -> IllegalArgumentException
  *   - precio unitario <= 0    -> IllegalArgumentException (error de captura)
